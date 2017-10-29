@@ -1,5 +1,6 @@
 import pprint
 
+from collections import namedtuple
 from cvxopt import solvers, sparse, spdiag, matrix, spmatrix
 from itertools import groupby
 from pandas import DataFrame
@@ -301,13 +302,16 @@ def color_individuals(tgi, tg_color, sw=1, ab=1, vi=1, only_individual=None):
     #for t in times:
     #  print("gc%s"%tg_color[t][it_group[i, t]], ", ".join("cost %s"%itc_min_cost[i, t, c] for c in colors))
     #print()
-  for i in individuals:
-    print(i, ":", " ".join(str(it_color[i, t]) for t in times))
+  #for i in individuals:
+  #  print(i, ":", " ".join(str(it_color[i, t]) for t in times))
   return total_min_cost, it_color
 
 def test_color_individuals():
-  test_cases = {
-      "equal costs": {
+  TestCase = namedtuple('TestCase', ['name', 'args', 'want_cost', 'want_coloring'])
+  test_cases = [
+    TestCase(
+      name="separate groups",
+      args={
         'sw': 1, 'ab': 1, 'vi': 1,
         'tgi': [
           ('t1', 'g1', 'i1'),
@@ -320,7 +324,17 @@ def test_color_individuals():
           't2': { 'g1': 1, 'g2': 2 },
         }
       },
-      "cheap vi": {
+      want_cost=0,
+      want_coloring={
+        ('i1', 't1'): 1,
+        ('i1', 't2'): 1,
+        ('i2', 't1'): 2,
+        ('i2', 't2'): 2,
+      },
+    ),
+    TestCase(
+      name= "cheap vi",
+      args={
         'sw': 10, 'ab': 10, 'vi': 1,
         'tgi': [
           ('t1', 'g1', 'i1'),
@@ -336,8 +350,20 @@ def test_color_individuals():
           't3': { 'g1': 1, 'g2': 2 },
         }
       },
-      "cheap ab/vi": {
-        'sw': 10, 'ab': 1, 'vi': 1,
+      want_cost=3,
+      want_coloring={
+        ('i1', 't1'): 1,
+        ('i1', 't2'): 1,
+        ('i1', 't3'): 1,
+        ('i2', 't1'): 0,
+        ('i2', 't2'): 0,
+        ('i2', 't3'): 0,
+      },
+    ),
+    TestCase(
+      name="cheap ab/vi",
+      args={
+        'sw': 10, 'ab': 2, 'vi': 1,
         'tgi': [
           ('t1', 'g1', 'i1'),
           ('t1', 'g1', 'i2'),
@@ -352,7 +378,19 @@ def test_color_individuals():
           't3': { 'g1': 1, 'g2': 2 },
         }
       },
-      "cheap sw": {
+      want_cost=3,
+      want_coloring={
+        ('i1', 't1'): 1,
+        ('i1', 't2'): 1,
+        ('i1', 't3'): 1,
+        ('i2', 't1'): 0,
+        ('i2', 't2'): 0,
+        ('i2', 't3'): 0,
+      },
+    ),
+    TestCase(
+      name="cheap sw",
+      args={
         'sw': 1, 'ab': 10, 'vi': 10,
         'tgi': [
           ('t1', 'g1', 'i1'),
@@ -365,33 +403,27 @@ def test_color_individuals():
           't3': { 'g1': 1 },
         }
       },
-      "cheap ab/vi": {
-        'sw': 10, 'ab': 1, 'vi': 1,
-        'only_individual': 'i1',
-        'tgi': [
-          ('t1', 'g1', 'i1'),
-          ('t1', 'g2', 'i2'),
-          ('t1', 'g3', 'i3'),
-          ('t2', 'g1', 'i1'),
-          ('t2', 'g2', 'i2'),
-          ('t2', 'g3', 'i3'),
-          ('t3', 'g1', 'i1'),
-          ('t3', 'g2', 'i2'),
-          ('t3', 'g3', 'i3'),
-        ],
-        'tg_color': {
-          't1': { 'g1': 1, 'g2': 2, 'g3': 3 },
-          't2': { 'g1': 2, 'g2': 3, 'g3': 1 },
-          't3': { 'g1': 3, 'g2': 1, 'g3': 2 },
-        }
+      want_cost=2,
+      want_coloring={
+        ('i1', 't1'): 1,
+        ('i1', 't2'): 2,
+        ('i1', 't3'): 1,
       },
-  }
-  for desc, tc in test_cases.items():
-    print("Case:", desc)
-    pp.pprint(tc)
-    cost, it_color = color_individuals(**tc)
-    print("cost:", cost)
-    print()
+    ),
+  ]
+  for tc in test_cases:
+    cost, got_coloring = color_individuals(**tc.args)
+    if cost != tc.want_cost:
+      print("%s: want cost %d, got %d"%(tc.name, tc.want_cost, cost))
+    want_keys = set(tc.want_coloring.keys())
+    got_keys = set(got_coloring.keys())
+    for k in sorted(got_keys.difference(want_keys)):
+      print("%s: added coloring %s"%(tc.name, got_coloring[k]))
+    for k in sorted(want_keys.difference(got_keys)):
+      print("%s: deleted coloring %s"%(tc.name, tc.want_coloring[k]))
+    for k in sorted(want_keys.intersection(got_keys)):
+      if tc.want_coloring[k] != got_coloring[k]:
+        print("%s: want color[%s, %s]=%s, got %s"%(tc.name, k[0], k[1], tc.want_coloring[k], got_coloring[k]))
 # Test.
 if __name__ == '__main__':
   test_color_individuals()
